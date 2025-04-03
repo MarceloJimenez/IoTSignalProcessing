@@ -66,7 +66,7 @@ Generated using DAC on ESP32 (see `Sampling1.ino`).
 - **Energy consumption**
 
 Here its a diagram of the qualitative energy consumption of the system: 
-![EnergyDiagram](ruta/a/la/imagen.png)
+![EnergyDiagram](EnergyDiagram2.png)
 
 - **Volume of data**
 
