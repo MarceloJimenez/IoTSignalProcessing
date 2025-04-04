@@ -71,6 +71,11 @@ Generated using DAC on ESP32 (see `Sampling1.ino`).
 
 ---
 
+### Images of the Plot2.py
+
+![FreqDomain](Figure_FFT.png)
+![TimeDomain](Figure_TimeDomain.png)
+
 ## 🔐 Measurements of the performance
 
 - **Energy consumption**
