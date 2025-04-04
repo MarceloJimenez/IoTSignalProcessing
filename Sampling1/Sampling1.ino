@@ -94,9 +94,9 @@ void TaskADCRead(void *parameter) {
         xQueueSend(aggQueue, &adc_data, 0);
 
         //To use plot2.py uncomment this:
-        // Serial.print(micros());
-        // Serial.print(",");
-        // Serial.println(adc_data.adc_value);
+        Serial.print(micros());
+        Serial.print(",");
+        Serial.println(adc_data.adc_value);
 
         t_prev = t_now;  // Update timestamp
     }
