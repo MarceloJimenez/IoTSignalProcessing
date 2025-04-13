@@ -6,11 +6,17 @@
  * To connect to WiFi and MQTT broker, follow these steps:  
  * 1. Set up your WiFi credentials (SSID and password) in the code.
  *  -   Both your PC and ESP32 should be connected to the same WiFi network.
- * 2. Set up your MQTT broker address and port. 
+ * 2. Set up your MQTT broker address, config and port. 
+ *  - C:\Program Files\mosquitto\mosquitto.conf should have the following uncomented lines:
+ *      - listener 1883
+ *      - allow_anonymous true
  *  - mqtt_server = Use Win + r, open command prompt using cmd, and type ipconfig to find your local IP address 192.168.XXX.XX
- *  -  mqtt_port = 1883; This is default port for MQTT. You could change it in the file mosquitto.conf
- *  -  mqtt_topic = This is the topic for publishing data. Can be any name you want.
- * 3. Open a terminal and paste: mosquitto -v to start the MQTT broker.
+ *  - mqtt_port = 1883; This is default port for MQTT. You could change it in the file mosquitto.conf
+ *  - mqtt_topic = This is the topic for publishing data. Can be any name you want.
+ * 3. To start the MQTT broker open a terminal and paste: mosquitto -c "C:\Program Files\mosquitto\mosquitto.conf" -v .
+ *  - netstat -ano | findstr :1883  to show the port is open 
+ * 
+
  * 4. Open another terminal and paste: mosquitto_sub -h <mqtt_server> -t "<mqtt_topic>" -v to subscribe to the topic.
  * 
  * 5. Upload the code to your ESP32 board.
@@ -289,14 +295,31 @@ void TaskAggregation(void* param) {
 // ======================
 // INITIALIZATION
 // ======================
+unsigned long lastSleepTime = 0;  // Tracks the last time deep sleep was triggered
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  // Check if the ESP32 woke up from deep sleep
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+    Serial.println("{\"status\":\"Woke up from deep sleep\"}");
+  } else {
+    Serial.println("{\"status\":\"Power-on or reset\"}");
+  }
 
   connectToWiFi();  // Connect to WiFi
   client.setServer(mqtt_server, mqtt_port);
   connectToMQTT();                      // Connect to MQTT broker
   mqtt_connected = client.connected();  // Set connection flag
+
+  // Send WiFi and MQTT status
+  Serial.printf(
+    "{\"wifi_status\":\"%s\",\"wifi_ip\":\"%s\",\"mqtt_status\":\"%s\"}\n",
+    (WiFi.status() == WL_CONNECTED) ? "connected" : "disconnected",
+    WiFi.localIP().toString().c_str(),
+    mqtt_connected ? "connected" : "disconnected"
+  );
 
   dacWrite(DAC_PIN, offset);       // Initialize DAC output
   analogReadResolution(8);         // 8-bit ADC resolution
@@ -330,19 +353,27 @@ void setup() {
   xTaskCreatePinnedToCore(TaskAggregation, "RollingAverage", 4096, NULL, 1, NULL, 0);
 
   Serial.print("System Initialized: Tasks Running");
+
+  // Set up deep sleep for 10 seconds
+  esp_sleep_enable_timer_wakeup(10 * 1000000);  // 10 seconds in microseconds
 }
 
 // ======================
 // MAIN LOOP (Unused)
 // ======================
 void loop() {
-  vTaskDelete(NULL);  // Prevent accidental use
-  if (!client.connected()) {
-    connectToMQTT();  // Reconnect if MQTT is disconnected
-    mqtt_connected = client.connected();
+  unsigned long currentTime = millis();
+
+  // Check if 1 minute has passed since the last deep sleep
+  if (currentTime - lastSleepTime >= 60000) {  // 60,000 ms = 1 minute
+    Serial.println("{\"status\":\"Entering deep sleep for 10 seconds\"}");
+    delay(100);  // Allow time for the message to be sent
+    lastSleepTime = currentTime;  // Update the last sleep time
+    esp_deep_sleep_start();       // Enter deep sleep
   }
-  client.loop();  // Maintain MQTT connection
-  delay(10);      // Short delay
+
+  // Perform other tasks here (e.g., sampling, MQTT communication)
+  delay(1000);  // Add a delay to avoid busy looping
 }
 
 
