@@ -6,11 +6,17 @@
  * To connect to WiFi and MQTT broker, follow these steps:  
  * 1. Set up your WiFi credentials (SSID and password) in the code.
  *  -   Both your PC and ESP32 should be connected to the same WiFi network.
- * 2. Set up your MQTT broker address and port. 
+ * 2. Set up your MQTT broker address, config and port. 
+ *  - C:\Program Files\mosquitto\mosquitto.conf should have the following uncomented lines:
+ *      - listener 1883
+ *      - allow_anonymous true
  *  - mqtt_server = Use Win + r, open command prompt using cmd, and type ipconfig to find your local IP address 192.168.XXX.XX
- *  -  mqtt_port = 1883; This is default port for MQTT. You could change it in the file mosquitto.conf
- *  -  mqtt_topic = This is the topic for publishing data. Can be any name you want.
- * 3. Open a terminal and paste: mosquitto -v to start the MQTT broker.
+ *  - mqtt_port = 1883; This is default port for MQTT. You could change it in the file mosquitto.conf
+ *  - mqtt_topic = This is the topic for publishing data. Can be any name you want.
+ * 3. To start the MQTT broker open a terminal and paste: mosquitto -c "C:\Program Files\mosquitto\mosquitto.conf" -v .
+ *  - netstat -ano | findstr :1883  to show the port is open 
+ * 
+
  * 4. Open another terminal and paste: mosquitto_sub -h <mqtt_server> -t "<mqtt_topic>" -v to subscribe to the topic.
  * 
  * 5. Upload the code to your ESP32 board.
@@ -60,7 +66,7 @@ typedef struct {
 volatile bool mqtt_connected = false;  // MQTT connection status flag
 const char* ssid = "S23 de Marcelo";
 const char* password = "12345678";
-const char* mqtt_server = "192.168.125.32";
+const char* mqtt_server = "192.168.28.32";
 const int mqtt_port = 1883;                // MQTT port
 const char* mqtt_topic = "iot-homework";  // MQTT topic for publishing
 
@@ -69,6 +75,9 @@ PubSubClient client(espClient);  // MQTT client object
 
 portMUX_TYPE samplingMux = portMUX_INITIALIZER_UNLOCKED;
 SemaphoreHandle_t serialMutex;
+
+RTC_DATA_ATTR bool fftPerformed = false;  // Flag to track if FFT has been performed
+RTC_DATA_ATTR float savedSampleFrequency = 50.0;  // Default sampling frequency
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -113,10 +122,11 @@ void TaskADCRead(void* parameter) {
   ADCData_t adc_data;
   unsigned long t_prev = micros();  // Initial timestamp
   portENTER_CRITICAL(&samplingMux);
-  unsigned long samplePeriod = 1000000UL / sampleFrequency;
+  unsigned long samplePeriod;
   portEXIT_CRITICAL(&samplingMux);
   unsigned long lastSampleTime = micros();
   while (1) {
+    samplePeriod = 1000000UL / savedSampleFrequency;
     if ((micros() - lastSampleTime) >= samplePeriod) {
       lastSampleTime += samplePeriod;
       unsigned long t_now = micros();            // Capture time
@@ -143,6 +153,12 @@ void TaskADCRead(void* parameter) {
 // DATA PROCESSING TASK (Core 0)
 // ======================
 void TaskProcess(void* pvParameters) {
+  if (fftPerformed) {
+    Serial.println("[FFT] Skipping FFT computation (already performed).");
+    vTaskDelete(NULL);  // Terminate the task
+    return;
+  }
+
   ADCData_t data;
   float vReal[FFT_SAMPLE_SIZE];
   float vImag[FFT_SAMPLE_SIZE];
@@ -150,7 +166,7 @@ void TaskProcess(void* pvParameters) {
   int count = 0;
   float prev_maxFreq = 0.0;
   float maxFreq = 0.0;
-
+  float totalSampleFrequency = 0.0;
 
   while (count <= 5) {
     float sum = 0.0;
@@ -215,17 +231,14 @@ void TaskProcess(void* pvParameters) {
 
     if (maxFreq > 1.0 && maxFreq <= 10000.0) {
       portENTER_CRITICAL(&samplingMux);
-      sampleFrequency = 2.0 * maxFreq;
+      totalSampleFrequency += 2.0 * maxFreq;  // Adapt sampling frequency
       portEXIT_CRITICAL(&samplingMux);
     }
 
-
     if (toPlot_fft) {
-      // Serial.Printf("[FFT] sampleFrequency set to %.2f Hz (max freq: %.2f Hz)\n", sampleFrequency, maxFreq);
-      // Serial.printf("[FFT] Max freq: %.2f Hz\n", maxFreq);
       for (int i = 1; i < N; i++) {
         float freq = i * binWidth;
-        Serial.printf("FFT:%.2f:%.2f\n", freq, vReal[i]);  // FFT:<frecuencia_en_Hz>:<magnitud>
+        Serial.printf("FFT:%.2f:%.2f\n", freq, vReal[i]);  // FFT:<frequency_in_Hz>:<magnitude>
       }
     }
     count++;
@@ -237,8 +250,15 @@ void TaskProcess(void* pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(1000));  // Delay for 1000 milliseconds
   }
 
+  if (count == 6) {
+    portENTER_CRITICAL(&samplingMux);
+    sampleFrequency = totalSampleFrequency / 5;  // Average sampling frequency
+    savedSampleFrequency = sampleFrequency;  // Save to RTC memory
+    portEXIT_CRITICAL(&samplingMux);
+}
 
-
+  fftPerformed = true;  // Set the flag to indicate FFT has been performed
+  Serial.println("[FFT] FFT computation completed. Flag set.");
   vTaskDelete(NULL);
 }
 
@@ -262,19 +282,17 @@ void TaskAggregation(void* param) {
 
       if (elapsed_time >= 5000000UL) {  // Every 5 seconds
         float average = (count > 0) ? (float)sum / count : 0.0;
-        Serial.printf("[Agg] Average over 5s: %.2f (%d samples)\n", average, count);
-        Serial.printf("MQTT:%.2f\n", average);
-        Serial.printf("SAMPLE_FREQ:%.2f\n", sampleFrequency);  // Add sampling frequency output
-        Serial.printf("[FFT] FINAL Sample freq: %.2f Hz\n", sampleFrequency);
+        Serial.printf("{\"average\":%.2f,\"samples\":%d}\n", average, count);
+        Serial.printf("{\"sample_freq\":%.2f}\n", savedSampleFrequency);  // Add sampling frequency output
 
         if (mqtt_connected) {
           char payload[32];
           snprintf(payload, sizeof(payload), "%.2f", average);
 
           if (client.publish(mqtt_topic, payload)) {
-            Serial.printf("[MQTT] Sent average: %.2f\n", average);
+            Serial.printf("{\"mqtt_status\":\"Sent average: %.2f\"}\n", average);
           } else {
-            Serial.print("[MQTT] Failed to send data!");
+            Serial.println("{\"mqtt_status\":\"Failed to send data!\"}");
           }
         }
         // Reset counters
@@ -289,14 +307,34 @@ void TaskAggregation(void* param) {
 // ======================
 // INITIALIZATION
 // ======================
+unsigned long lastSleepTime = 0;  // Tracks the last time deep sleep was triggered
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  // Check if the ESP32 woke up from deep sleep
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+    Serial.println("{\"status\":\"Woke up from deep sleep\"}");
+  } else {
+    Serial.println("{\"status\":\"Power-on or reset\"}");
+    fftPerformed = false;  // Reset the flag on power-on
+    sampleFrequency = 50.0;  // Default sampling frequency
+    savedSampleFrequency = sampleFrequency;  // Reset saved frequency
+  }
 
   connectToWiFi();  // Connect to WiFi
   client.setServer(mqtt_server, mqtt_port);
   connectToMQTT();                      // Connect to MQTT broker
   mqtt_connected = client.connected();  // Set connection flag
+
+  // Send WiFi and MQTT status
+  Serial.printf(
+    "{\"wifi_status\":\"%s\",\"wifi_ip\":\"%s\",\"mqtt_status\":\"%s\"}\n",
+    (WiFi.status() == WL_CONNECTED) ? "connected" : "disconnected",
+    WiFi.localIP().toString().c_str(),
+    mqtt_connected ? "connected" : "disconnected"
+  );
 
   dacWrite(DAC_PIN, offset);       // Initialize DAC output
   analogReadResolution(8);         // 8-bit ADC resolution
@@ -330,19 +368,27 @@ void setup() {
   xTaskCreatePinnedToCore(TaskAggregation, "RollingAverage", 4096, NULL, 1, NULL, 0);
 
   Serial.print("System Initialized: Tasks Running");
+
+  // Set up deep sleep for 10 seconds
+  esp_sleep_enable_timer_wakeup(10 * 1000000);  // 10 seconds in microseconds
 }
 
 // ======================
 // MAIN LOOP (Unused)
 // ======================
 void loop() {
-  vTaskDelete(NULL);  // Prevent accidental use
-  if (!client.connected()) {
-    connectToMQTT();  // Reconnect if MQTT is disconnected
-    mqtt_connected = client.connected();
+  unsigned long currentTime = millis();
+
+  // Check if 1 minute has passed since the last deep sleep
+  if (currentTime - lastSleepTime >= 60000) {  // 60,000 ms = 1 minute
+    Serial.println("{\"status\":\"Entering deep sleep for 10 seconds\"}");
+    delay(200);  // Allow time for the message to be sent
+    lastSleepTime = currentTime;  // Update the last sleep time
+    esp_deep_sleep_start();       // Enter deep sleep
   }
-  client.loop();  // Maintain MQTT connection
-  delay(10);      // Short delay
+
+  // Perform other tasks here (e.g., sampling, MQTT communication)
+  delay(1000);  // Add a delay to avoid busy looping
 }
 
 
@@ -350,7 +396,7 @@ void loop() {
 // WIFI CONNECTION HELPER
 // ======================
 void connectToWiFi() {
-  Serial.println("[WiFi] Connecting to WiFi...");
+  Serial.println("{\"wifi_status\":\"Connecting to WiFi...\"}");
   WiFi.begin(ssid, password);
 
   unsigned long startAttemptTime = millis();
@@ -362,12 +408,10 @@ void connectToWiFi() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[WiFi] Connected!");
-    Serial.print("[WiFi] IP Address: ");
-    Serial.println(WiFi.localIP());
+    Serial.println("{\"wifi_status\":\"Connected!\"}");
   } else {
-    Serial.println("\n[WiFi] Failed to connect to WiFi. Restarting...");
-    ESP.restart();  // Restart the ESP32 if WiFi connection fails
+    Serial.println("{\"wifi_status\":\"Failed to connect to WiFi. Restarting...\"}");
+    // ESP.restart();  // Uncomment if you want to restart the ESP32 on failure
   }
 }
 
@@ -375,26 +419,25 @@ void connectToWiFi() {
 // MQTT CONNECTION HELPER
 // ======================
 void connectToMQTT() {
-  Serial.println("[MQTT] Connecting to MQTT broker...");
+  Serial.println("{\"mqtt_status\":\"Connecting to MQTT broker...\"}");
   int attempts = 0;
   const int maxAttempts = 5;  // Maximum number of connection attempts
 
   while (!client.connected() && attempts < maxAttempts) {
-    Serial.printf("[MQTT] Attempt %d/%d...\n", attempts + 1, maxAttempts);
+    Serial.printf("{\"mqtt_status\":\"Attempt %d/%d...\"}\n", attempts + 1, maxAttempts);
 
     if (client.connect("ESP32Client")) {  // Replace "ESP32Client" with a unique client ID if needed
-      Serial.println("[MQTT] Connected to broker!");
+      Serial.println("{\"mqtt_status\":\"Connected to broker!\"}");
       return;
     } else {
-      Serial.printf("[MQTT] Connection failed, rc=%d. Retrying in 2 seconds...\n", client.state());
-      Serial.printf("[MQTT] Connection state: %d\n", client.state());
+      Serial.printf("{\"mqtt_status\":\"Connection failed, rc=%d. Retrying in 2 seconds...\"}\n", client.state());
       delay(2000);
       attempts++;
     }
   }
 
   if (!client.connected()) {
-    Serial.println("[MQTT] Failed to connect to MQTT broker after multiple attempts. Restarting...");
-    ESP.restart();  // Restart the ESP32 if MQTT connection fails
+    Serial.println("{\"mqtt_status\":\"Failed to connect to MQTT broker after multiple attempts. Restarting...\"}");
+    // ESP.restart();  // Uncomment if you want to restart the ESP32 on failure
   }
 }

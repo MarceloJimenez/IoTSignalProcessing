@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from collections import deque
 from datetime import datetime
+import json
 
 import matplotlib
 matplotlib.use('TkAgg')
@@ -44,10 +45,13 @@ ax_adc.grid()
 # --- General Information Display (Bottom Left) ---
 ax_info = plt.subplot2grid((2, 2), (1, 0))
 ax_info.axis('off')  # Hide axes
-text_avg = ax_info.text(0.5, 0.7, '', fontsize=14, ha='center', va='center')
-text_freq = ax_info.text(0.5, 0.5, '', fontsize=12, ha='center', va='center')
-text_time = ax_info.text(0.5, 0.3, '', fontsize=10, ha='center', va='center')
-ax_info.set_title("Sampling and Comunication Information")
+text_avg = ax_info.text(0.5, 0.8, '', fontsize=12, ha='center', va='center')
+text_freq = ax_info.text(0.5, 0.6, '', fontsize=12, ha='center', va='center')
+text_wifi = ax_info.text(0.5, 0.4, '', fontsize=12, ha='center', va='center')
+text_wifi_ip = ax_info.text(0.5, 0.3, '', fontsize=10, ha='center', va='center')
+text_mqtt = ax_info.text(0.5, 0.2, '', fontsize=12 , ha='center', va='center')
+text_status = ax_info.text(0.5, 0.0, '', fontsize=12, ha='center', va='center')
+ax_info.set_title("System Status")
 
 # --- FFT Frequency Domain Plot (Bottom Right) ---
 ax_fft = plt.subplot2grid((2, 2), (1, 1))
@@ -77,16 +81,26 @@ def parse_line(line):
                 fft_freqs.append(freq)
                 fft_vals.append(mag)
 
-        elif line.startswith("MQTT:"):
-            avg = float(line.replace("MQTT:", "").strip())
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            text_avg.set_text(f"5sec Window Average: {avg:.2f}")
-            text_time.set_text(f"Last Updated: {timestamp}")
-            fig.canvas.draw_idle()
-
-        elif line.startswith("SAMPLE_FREQ:"):
-            freq = float(line.replace("SAMPLE_FREQ:", "").strip())
-            text_freq.set_text(f"Sampling Frequency: {freq:.2f} Hz")
+        elif line.startswith("{") and line.endswith("}"):
+            data = json.loads(line)
+            if "average" in data:
+                avg = data.get("average", 0.0)
+                text_avg.set_text(f"5sec Window Average: {avg:.2f}")
+            if "wifi_status" in data:
+                wifi_status = data.get("wifi_status", "unknown")
+                text_wifi.set_text(f"WiFi: {wifi_status}")
+            if "wifi_ip" in data:
+                wifi_ip = data.get("wifi_ip", "unknown")
+                text_wifi_ip.set_text(f"(IP: {wifi_ip})")
+            if "mqtt_status" in data:
+                mqtt_status = data.get("mqtt_status", "unknown")
+                text_mqtt.set_text(f"MQTT: {mqtt_status}")
+            if "sample_freq" in data:
+                sample_freq = data.get("sample_freq", 0.0)
+                text_freq.set_text(f"Sampling Frequency: {sample_freq:.2f} Hz")
+            if "status" in data:
+                status = data.get("status", "unknown")
+                text_status.set_text(f"Status: {status}")
             fig.canvas.draw_idle()
 
     except Exception as e:
