@@ -245,6 +245,8 @@ void TaskProcess(void* pvParameters) {
     Serial.printf("[FFT] Max freq: %.2f Hz\n", maxFreq);
     Serial.printf("[FFT] FINAL Sample freq: %.2f Hz\n", sampleFrequency);
     Serial.printf("[FTT] Dominant Frequency is %.2f Hz \n", peakFrequency);
+    Serial.printf("{\"sample_freq\":%.2f}\n", savedSampleFrequency);  // Add sampling frequency output
+
 
     vTaskDelay(pdMS_TO_TICKS(1000));  // Delay for 1000 milliseconds
   }
