@@ -133,7 +133,7 @@ try:
         plt.pause(0.001)
 
 except KeyboardInterrupt:
-    print("Exiting...")
+    print("Exiting....")
     ser.close()
     plt.ioff()
     plt.close()
