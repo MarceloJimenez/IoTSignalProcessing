@@ -74,7 +74,6 @@ WiFiClient espClient;            // WiFi client for MQTT
 PubSubClient client(espClient);  // MQTT client object
 
 portMUX_TYPE samplingMux = portMUX_INITIALIZER_UNLOCKED;
-SemaphoreHandle_t serialMutex;
 
 RTC_DATA_ATTR bool fftPerformed = false;  // Flag to track if FFT has been performed
 RTC_DATA_ATTR float savedSampleFrequency = 50.0;  // Default sampling frequency
@@ -282,12 +281,17 @@ void TaskAggregation(void* param) {
 
       if (elapsed_time >= 5000000UL) {  // Every 5 seconds
         float average = (count > 0) ? (float)sum / count : 0.0;
+        unsigned long timestamp = micros();  // Capture the timestamp when data is sent
+
+        // Send data with timestamp
+        Serial.printf("{\"average\":%.2f,\"samples\":%d,\"timestamp\":%lu}\n", average, count, timestamp);
+
         Serial.printf("{\"average\":%.2f,\"samples\":%d}\n", average, count);
         Serial.printf("{\"sample_freq\":%.2f}\n", savedSampleFrequency);  // Add sampling frequency output
 
         if (mqtt_connected) {
           char payload[32];
-          snprintf(payload, sizeof(payload), "%.2f", average);
+          snprintf(payload, sizeof(payload), "{\"average\":%.2f,\"timestamp\":%lu}", average, timestamp);
 
           if (client.publish(mqtt_topic, payload)) {
             Serial.printf("{\"mqtt_status\":\"Sent average: %.2f\"}\n", average);
@@ -352,13 +356,6 @@ void setup() {
     Serial.print("FATAL: Queue creation failed!");
     while (1)
       ;
-
-    serialMutex = xSemaphoreCreateMutex();
-    if (serialMutex == NULL) {
-      Serial.print("FATAL: serialMutex creation failed!");
-      while (1)
-        ;
-    }
   }
 
   // Create tasks and assign them to specific cores
