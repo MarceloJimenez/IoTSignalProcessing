@@ -290,9 +290,8 @@ void TaskAggregation(void* param) {
         Serial.printf("{\"sample_freq\":%.2f}\n", savedSampleFrequency);  // Add sampling frequency output
 
         if (mqtt_connected) {
-          char payload[32];
+          char payload[64];
           snprintf(payload, sizeof(payload), "{\"average\":%.2f,\"timestamp\":%lu}", average, timestamp);
-
           if (client.publish(mqtt_topic, payload)) {
             Serial.printf("{\"mqtt_status\":\"Sent average: %.2f\"}\n", average);
           } else {

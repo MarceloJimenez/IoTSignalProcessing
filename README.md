@@ -29,15 +29,7 @@ The system performs the following tasks:
 
 ## ⚙️ System Architecture
 
-```
-  [DAC Signal Generator] -> [ADC Sampler - ESP32 (FreeRTOS)] -> [FFT Analysis]
-                                       ↘︎
-                                      [Adaptive Sampling]
-                                       ↘︎
-                                    [Aggregator (5s)]
-                                   ↙︎              ↘︎
-            [MQTT + WiFi to Edge Server]   [LoRaWAN + TTN to Cloud]
-```
+![System](SystemArchitecture.jpg)
 
 ---
 

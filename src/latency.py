@@ -12,12 +12,15 @@ def on_message(client, userdata, msg):
     try:
         # Parse the received message
         payload = json.loads(msg.payload.decode())
-        sent_timestamp = payload.get("timestamp", 0)
+        sent_timestamp = payload.get("timestamp", 0)  # Timestamp from ESP32 in microseconds
         received_timestamp = int(time.time() * 1e6)  # Current time in microseconds
 
-        # Calculate latency
-        latency = (received_timestamp - sent_timestamp) / 1000.0  # Convert to milliseconds
-        print(f"Data: {payload}, Latency: {latency:.2f} ms")
+        # Calculate latency in microseconds
+        latency_microseconds = received_timestamp - sent_timestamp
+
+        # Convert latency to seconds
+        latency_seconds = latency_microseconds / 1e6
+        print(f"Data: {payload}, Latency: {latency_seconds:.6f} seconds")
     except Exception as e:
         print(f"Error processing message: {e}")
 
