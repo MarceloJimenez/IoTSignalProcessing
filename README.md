@@ -154,7 +154,7 @@ The following diagram shows the qualitative energy consumption of the system:
 ### **Energy Optimization**
 1. **Adaptive Sampling Frequency**:
    - Reduces the number of samples processed, lowering energy consumption.
-   - Example: Sampling at 120 Hz instead of 20,000 Hz reduces energy usage by a factor of ~166.67.
+   - Example: Sampling at 20 Hz instead of 20,000 Hz reduces energy usage by a factor of 1000.
 
 2. **Deep Sleep**:
    - The ESP32 enters deep sleep for 10 seconds every minute, significantly reducing idle energy consumption.
@@ -172,27 +172,13 @@ The following diagram shows the qualitative energy consumption of the system:
 ### **Current Sampling Frequency**
 - The system dynamically adjusts the sampling frequency based on the Nyquist criterion. For example:
   - If the highest frequency component is 5 Hz, the sampling frequency is set to 10 Hz.
-  - In this implementation, the sampling frequency is typically **120 Hz**.
+  - In this implementation, the sampling frequency is typically **20 Hz**.
 
 ### **Data Reduction**
-- By reducing the sampling frequency from 20,000 Hz to 120 Hz, the system achieves a **data reduction factor of ~166.67**.
+- By reducing the sampling frequency from 20,000 Hz to 20 Hz, the system achieves a **data reduction factor of ~1000**.
 
----
 
-## 📁 Folder Structure
 
-```
-├── Sampling1.ino            # DAC + ADC signal
-├── Max_Freq.ino             # Max sampling test
-├── README.md
-└── doc/                     # Energy measurements, signal plots, etc.
-```
-
----
-
-Here's a `README.md` file in Markdown format that explains each function in your ESP32 signal processing project:
-
----
 
 # Code Explanation
 
@@ -283,8 +269,8 @@ Runs on **Core 0**. Calculates and publishes rolling average:
 | `FFT_SAMPLE_SIZE`     | 128                 | Number of samples per FFT cycle              |
 | `DAC_PIN`             | 25                  | GPIO pin used for DAC output                 |
 | `ADC_PIN`             | 34                  | GPIO pin used for ADC input                  |
-| `frequency`           | 40.0 Hz             | Base sine wave frequency                     |
-| `sampleFrequency`     | 20000.0 Hz (initial)| Initial ADC sampling frequency               |
+| `frequency`           | 10.0 Hz   + 5 Hz          | Base sine wave frequency                     |
+| `sampleFrequency`     | 50 Hz (initial)| Initial ADC sampling frequency               |
 | `mqtt_topic`          | `iot/aggregate`     | MQTT topic for average data publishing       |
 
 ---
