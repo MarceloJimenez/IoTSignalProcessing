@@ -29,7 +29,7 @@ The system performs the following tasks:
 
 ## ⚙️ System Architecture
 
-![System](SystemArchitecture.jpg)
+![System2](SystemArchitecture2.jpg)
 
 ---
 
