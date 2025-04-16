@@ -45,11 +45,12 @@ ax_adc.grid()
 # --- General Information Display (Bottom Left) ---
 ax_info = plt.subplot2grid((2, 2), (1, 0))
 ax_info.axis('off')  # Hide axes
-text_avg = ax_info.text(0.5, 0.8, '', fontsize=14, ha='center', va='center')
+text_avg = ax_info.text(0.5, 0.8, '', fontsize=12, ha='center', va='center')
 text_freq = ax_info.text(0.5, 0.6, '', fontsize=12, ha='center', va='center')
-text_wifi = ax_info.text(0.5, 0.4, '', fontsize=10, ha='center', va='center')
-text_mqtt = ax_info.text(0.5, 0.2, '', fontsize=10, ha='center', va='center')
-text_status = ax_info.text(0.5, 0.0, '', fontsize=10, ha='center', va='center')
+text_wifi = ax_info.text(0.5, 0.4, '', fontsize=12, ha='center', va='center')
+text_wifi_ip = ax_info.text(0.5, 0.3, '', fontsize=10, ha='center', va='center')
+text_mqtt = ax_info.text(0.5, 0.2, '', fontsize=12 , ha='center', va='center')
+text_status = ax_info.text(0.5, 0.0, '', fontsize=12, ha='center', va='center')
 ax_info.set_title("System Status")
 
 # --- FFT Frequency Domain Plot (Bottom Right) ---
@@ -80,22 +81,23 @@ def parse_line(line):
                 fft_freqs.append(freq)
                 fft_vals.append(mag)
 
-# Parse JSON-like structured data
         elif line.startswith("{") and line.endswith("}"):
             data = json.loads(line)
             if "average" in data:
                 avg = data.get("average", 0.0)
                 text_avg.set_text(f"5sec Window Average: {avg:.2f}")
-            if "sample_freq" in data:
-                freq = data.get("sample_freq", 0.0)
-                text_freq.set_text(f"Sampling Frequency: {freq:.2f} Hz")
-            if "wifi_status" in data and "wifi_ip" in data:
+            if "wifi_status" in data:
                 wifi_status = data.get("wifi_status", "unknown")
+                text_wifi.set_text(f"WiFi: {wifi_status}")
+            if "wifi_ip" in data:
                 wifi_ip = data.get("wifi_ip", "unknown")
-                text_wifi.set_text(f"WiFi: {wifi_status} (IP: {wifi_ip})")
+                text_wifi_ip.set_text(f"(IP: {wifi_ip})")
             if "mqtt_status" in data:
                 mqtt_status = data.get("mqtt_status", "unknown")
                 text_mqtt.set_text(f"MQTT: {mqtt_status}")
+            if "sample_freq" in data:
+                sample_freq = data.get("sample_freq", 0.0)
+                text_freq.set_text(f"Sampling Frequency: {sample_freq:.2f} Hz")
             if "status" in data:
                 status = data.get("status", "unknown")
                 text_status.set_text(f"Status: {status}")

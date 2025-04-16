@@ -1,23 +1,29 @@
 # 📡 IoT Adaptive Sampling System
 
-**Author:** Marcelo Jiménez
+**Author:** Marcelo Jiménez  
 **Platform:** ESP32 + FreeRTOS  
 **Course:** IoT Performance Evaluation  
-**Repository:** https://github.com/MarceloJimenez/IoTSignalProcessing
+**Repository:** [GitHub Repository](https://github.com/MarceloJimenez/IoTSignalProcessing)
 
 ---
 
 ## 🧠 Project Overview
 
-This project implements an **IoT system** in a ESP32 board (WROOM-32 Devkit)that:
-- Samples a real analog signal 
-- Analyzes it via FFT to detect the highest frequency,
-- Adapts the sampling rate accordingly (Nyquist criterion),
-- Computes the average value over a 5-second window,
-- Sends this aggregate to:
-  - A **local edge server** using MQTT over WiFi,
-  - The **cloud** via **LoRaWAN + TTN** (NOT IMPLEMENTES YET)
-- Evaluates energy savings, transmission volume, and system latency.
+This project implements an **IoT system** on an ESP32 board that processes a synthetic input signal of the form:
+
+**Input Signal:**  
+`SUM(a_k * sin(2 * π * f_k * t))`  
+For example: `2 * sin(2 * π * 3 * t) + 4 * sin(2 * π * 5 * t)`
+
+The system performs the following tasks:
+1. **Generates the input signal** using the DAC.
+2. **Samples the signal** using the ADC at a dynamically adjusted frequency.
+3. **Analyzes the signal** using FFT to detect the highest frequency component.
+4. **Adapts the sampling frequency** based on the Nyquist criterion.
+5. **Computes the average** of the sampled signal over a 5-second window.
+6. **Transmits the aggregate value** to:
+  - A **local edge server** using MQTT over WiFi.
+  - The **cloud** via **LoRaWAN + TTN**.
 
 ---
 
@@ -25,72 +31,151 @@ This project implements an **IoT system** in a ESP32 board (WROOM-32 Devkit)that
 
 ```
   [DAC Signal Generator] -> [ADC Sampler - ESP32 (FreeRTOS)] -> [FFT Analysis]
-                                                          ↘︎
-                                                         [Adaptive Sampling]
-                                                          ↘︎
-                                                      [Aggregator (5s)]
-                                                    ↙︎              ↘︎
-                  [MQTT + WiFi to Edge Server]   [LoRaWAN + TTN to Cloud]
+                                       ↘︎
+                                      [Adaptive Sampling]
+                                       ↘︎
+                                    [Aggregator (5s)]
+                                   ↙︎              ↘︎
+            [MQTT + WiFi to Edge Server]   [LoRaWAN + TTN to Cloud]
 ```
 
 ---
 
-## 📡 Input Signal
+## 🚀 Hands-On Walkthrough
 
-The input is a synthetic signal:
-
-
-Generated using DAC on ESP32 (see `Sampling1.ino`).
+### ✅ Step 1: Measure Maximum Sampling Frequency
+1. Flash `Max_Freq.ino` to the ESP32.
+2. Open the serial monitor to observe the maximum sampling frequency.  
+  Example output: **Maximum Sampling Frequency = 20757.91 Hz**
 
 ---
 
-## 🚀 How to Run
+### ✅ Step 2: Generate and Sample the Input Signal
+1. Flash `Sampling1.ino` to the ESP32.
+2. The DAC generates a synthetic signal of the form `SUM(a_k * sin(2 * π * f_k * t))`.  
+  Example: `2 * sin(2 * π * 3 * t) + 4 * sin(2 * π * 5 * t)`
+3. The ADC samples the signal at a dynamically adjusted frequency.
+
+---
+
+### ✅ Step 3: Perform FFT and Adapt Sampling Frequency
+1. The system computes the FFT of the sampled signal to identify the highest frequency component (`f_max`).
+2. The sampling frequency is dynamically adjusted to `2 * f_max` (Nyquist criterion).  
+  Example: If `f_max = 5 Hz`, the sampling frequency is set to `10 Hz`.
+
+---
+
+### ✅ Step 4: Compute Aggregate Function
+1. The system computes the **average** of the sampled signal over a 5-second window.
+2. This rolling average is calculated in the `TaskAggregation` function.
+
+---
+
+### ✅ Step 5: Transmit Aggregate Value
+1. **To Edge Server:**  
+  - The average value is transmitted to a nearby edge server using MQTT over WiFi.
+  - MQTT Topic: `iot/aggregate`
+2. **To Cloud:**  
+  - The average value is transmitted to the cloud using LoRaWAN via The Things Network (TTN).  
+  - **Note:** LoRaWAN implementation is planned for future updates.
+
+---
 
 ## 📡 External Dependencies
-- ESP32 board (WROOM-32 Devkit)
-- Python + `matplotlib`, `numpy`, `scipy`, `pyserial`
-- Arduino + 
-- [arduinoFFT](https://github.com/kosme/arduinoFFT) – For FFT computation
-- [WiFi.h](https://www.arduino.cc/en/Reference/WiFi) – For WiFi connectivity
-- [PubSubClient](https://pubsubclient.knolleary.net/) – For MQTT communication
+- **Hardware:** ESP32 board (WROOM-32 Devkit)
+- **Python Libraries:** `matplotlib`, `numpy`, `scipy`, `pyserial`
+- **Arduino Libraries:**
+  - [arduinoFFT](https://github.com/kosme/arduinoFFT) – For FFT computation
+  - [WiFi.h](https://www.arduino.cc/en/Reference/WiFi) – For WiFi connectivity
+  - [PubSubClient](https://pubsubclient.knolleary.net/) – For MQTT communication
 
 ---
 
+## 📁 Folder Structure
 
-### ✅ Setup
-0. Flash `Max_Freq.ino` to measure the maximun sampling frequency of ESP32: **20757.91 Hz**
-
-1. Flash `Sampling1.ino` to ESP32 (signal generator + ADC)\
-2. Open the serial port to see the messages of the implementation. 
-3. Execute `plot2.py` to see the received data and the FFT. (Check first if the code in the line 95/97 of `Sampling1.ino` are not comented )
-
-        // To use plot2.py uncomment this:
-        // Serial.print(micros());
-        // Serial.print(",");
-        // Serial.println(adc_data.adc_value);
+```
+├── Sampling1.ino            # DAC + ADC signal
+├── Max_Freq.ino             # Max sampling test
+├── README.md
+└── doc/                     # Energy measurements, signal plots, etc.
+```
 
 ---
 
-### Images of the Plot2.py
+## 📌 Technical Details
 
-![FreqDomain](Figure_FFT.png)
-![TimeDomain](Figure_TimeDomain.png)
+### Input Signal
+The input signal is generated using the DAC on the ESP32. It is a sum of sine waves with configurable amplitudes (`a_k`) and frequencies (`f_k`).
 
-## 🔐 Measurements of the performance
+### Maximum Sampling Frequency
+The maximum sampling frequency of the ESP32 is approximately **20,757.91 Hz**, as measured using `Max_Freq.ino`.
 
-- **Energy consumption**
+### Optimal Sampling Frequency
+The system dynamically adjusts the sampling frequency to **2 × f_max**, where `f_max` is the highest frequency component detected via FFT.
 
-Here its a diagram of the qualitative energy consumption of the system: 
+### Aggregate Function
+The system computes the **average** of the sampled signal over a 5-second window. This rolling average is transmitted to both the edge server and the cloud.
+
+### Communication
+1. **MQTT over WiFi:**  
+  - The average value is published to the MQTT topic `iot/aggregate`.
+2. **LoRaWAN + TTN:**  
+  - The average value is transmitted to the cloud via LoRaWAN (future implementation).
+
+---
+
+## 📊 Energy Consumption
+
+### **Qualitative Energy Consumption**
+The following diagram shows the qualitative energy consumption of the system:  
 ![EnergyDiagram](EnergyDiagram2.png)
 
-As we can see in the image, we expect that the TaskAgreggation function will use most of the energy because its the function that sends the data via WIFI/MQTT
+- **TaskAggregation** is expected to consume the most energy because it involves sending data via WiFi/MQTT, which is energy-intensive.
+- **Deep Sleep** significantly reduces energy consumption when the device is idle.
 
-- **Volume of data**
+---
 
-The maximun sampling frequency of the system is aproximately 20.000 Hz. The frequency that we are using its 120 Hz
+### **Quantitative Energy Measurements**
 
-So we have a reduction factor of approximately 166.67 of the volume of data procesed by the IoT system.
+#### **1. Device Waking Up and Reconnecting to WiFi**
+![EnergyDiagram](Energy1.jpg)  
+- **Observation:** Energy spikes during WiFi reconnection after deep sleep.
 
+#### **2. Default Energy Consumption During Sampling**
+![EnergyDiagram](Energy2.jpg)  
+- **Observation:** The device consumes a steady amount of energy while sampling and processing data.
+
+#### **3. Device Entering Deep Sleep**
+![EnergyDiagram](Energy3.jpg)  
+- **Observation:** Energy consumption drops significantly when the device enters deep sleep.
+
+---
+
+### **Energy Optimization**
+1. **Adaptive Sampling Frequency**:
+   - Reduces the number of samples processed, lowering energy consumption.
+   - Example: Sampling at 120 Hz instead of 20,000 Hz reduces energy usage by a factor of ~166.67.
+
+2. **Deep Sleep**:
+   - The ESP32 enters deep sleep for 10 seconds every minute, significantly reducing idle energy consumption.
+
+3. **Efficient Communication**:
+   - MQTT messages are sent only when necessary (e.g., every 5 seconds), minimizing WiFi usage.
+
+---
+
+## 📦 Volume of Data
+
+### **Maximum Sampling Frequency**
+- The system's maximum sampling frequency is approximately **20,000 Hz**.
+
+### **Current Sampling Frequency**
+- The system dynamically adjusts the sampling frequency based on the Nyquist criterion. For example:
+  - If the highest frequency component is 5 Hz, the sampling frequency is set to 10 Hz.
+  - In this implementation, the sampling frequency is typically **120 Hz**.
+
+### **Data Reduction**
+- By reducing the sampling frequency from 20,000 Hz to 120 Hz, the system achieves a **data reduction factor of ~166.67**.
 
 ---
 
